@@ -1,33 +1,34 @@
 :root {
-  --paper: #eef0ea;
-  --paper-line: #d9dccf;
+  --paper: #e7ecf1;
+  --paper-line: #cdd8e2;
   --ink: #1c2b3a;
   --ink-soft: #4a5a6a;
   --brass: #b9863f;
   --brass-dark: #8f6529;
   --red: #a6432d;
   --green: #3f7a5c;
-  --card: #f8f8f4;
+  --card: #f8f9fb;
 }
 
-/* Page themes: same ink/brass/red/green accents everywhere so the app still
-   feels like one product, but each page gets its own light backdrop so it's
-   instantly clear which section you're in. */
+/* Page themes: same ink/brass accent everywhere so the app still feels like
+   one product, but each page gets a distinctly different backdrop color
+   AND pattern so it's unmistakable which section you're in at a glance. */
 body.theme-income {
-  --paper: #e8f1ea;
-  --paper-line: #d0e0d2;
-  --card: #f5faf6;
+  --paper: #e3f0e6;
+  --paper-line: #c3dbc8;
+  --card: #f4faf5;
 }
 body.theme-recurring {
-  --paper: #f4ecdc;
-  --paper-line: #e3d5b7;
-  --card: #fbf6ec;
+  --paper: #f6ecd8;
+  --paper-line: #e5d3a8;
+  --card: #fcf7ea;
 }
 
 * { box-sizing: border-box; }
 body {
   margin: 0;
-  background: var(--paper);
+  background-color: var(--paper);
+  /* Expenses: fine horizontal ledger rules */
   background-image: linear-gradient(var(--paper-line) 1px, transparent 1px);
   background-size: 100% 2.1em;
   background-position: 0 7.4em;
@@ -38,9 +39,21 @@ body {
   justify-content: center;
   padding: 40px 16px;
 }
+/* Income: soft dot-grid, evokes growth/graph paper */
+body.theme-income {
+  background-image: radial-gradient(var(--paper-line) 1.2px, transparent 1.2px);
+  background-size: 18px 18px;
+  background-position: 0 0;
+}
+/* Recurring & Alerts: gentle diagonal hatch, evokes a reminder/ticket stub */
+body.theme-recurring {
+  background-image: repeating-linear-gradient(135deg, var(--paper-line) 0px, var(--paper-line) 1px, transparent 1px, transparent 14px);
+  background-size: auto;
+  background-position: 0 0;
+}
+header.masthead .eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--brass-dark); }
 .app { width: 100%; max-width: 860px; }
 header.masthead { text-align: center; margin-bottom: 28px; }
-header.masthead .eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--brass-dark); }
 header.masthead h1 { font-family: 'Fraunces', serif; font-weight: 600; font-size: 40px; margin: 4px 0 0; letter-spacing: -0.01em; }
 header.masthead .rule { width: 64px; height: 3px; background: var(--brass); margin: 14px auto 0; border-radius: 2px; }
 
@@ -138,6 +151,19 @@ footer.credit { text-align: center; font-size: 12px; color: var(--ink-soft); mar
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
 .print-actions { display: flex; gap: 8px; }
+
+.dropdown { position: relative; display: inline-block; }
+.dropdown-menu {
+  position: absolute; right: 0; top: calc(100% + 6px);
+  background: #fff; border: 1px solid var(--paper-line); border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(28,43,58,0.14); min-width: 170px; z-index: 20;
+  padding: 6px; display: flex; flex-direction: column; gap: 2px;
+}
+.dropdown-menu button {
+  background: none; border: none; text-align: left; padding: 9px 10px;
+  font-size: 13px; font-weight: 500; color: var(--ink); border-radius: 5px; width: 100%;
+}
+.dropdown-menu button:hover { background: var(--paper); }
 
 @media (max-width: 640px) {
   body { padding: 20px 10px; }
