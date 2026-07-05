@@ -9,6 +9,21 @@
   --green: #3f7a5c;
   --card: #f8f8f4;
 }
+
+/* Page themes: same ink/brass/red/green accents everywhere so the app still
+   feels like one product, but each page gets its own light backdrop so it's
+   instantly clear which section you're in. */
+body.theme-income {
+  --paper: #e8f1ea;
+  --paper-line: #d0e0d2;
+  --card: #f5faf6;
+}
+body.theme-recurring {
+  --paper: #f4ecdc;
+  --paper-line: #e3d5b7;
+  --card: #fbf6ec;
+}
+
 * { box-sizing: border-box; }
 body {
   margin: 0;
@@ -120,7 +135,41 @@ footer.credit { text-align: center; font-size: 12px; color: var(--ink-soft); mar
 .toggle-pill.on { background: #eaf3ee; color: var(--green); border-color: #c7e2d3; }
 .toggle-pill.off { background: #f1f1ec; color: var(--ink-soft); }
 
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+.print-actions { display: flex; gap: 8px; }
+
 @media (max-width: 640px) {
+  body { padding: 20px 10px; }
+  header.masthead h1 { font-size: 32px; }
   .entry-grid, .summary-row, .charts-row { grid-template-columns: 1fr; }
-  table.ledger th, table.ledger td { padding: 8px 12px; }
+  table.ledger th, table.ledger td { padding: 8px 10px; font-size: 13px; white-space: nowrap; }
+  nav.tabs { gap: 4px; }
+  nav.tabs a { padding: 7px 12px; font-size: 12px; }
+  .toolbar { flex-direction: column; align-items: stretch; }
+  .toolbar .actions { flex-wrap: wrap; }
+  .toolbar .actions button { flex: 1; min-width: 120px; }
+  .entry-card, .ledger-card, .chart-card, .auth-card { padding: 18px 16px; }
+  .filter-bar { flex-direction: column; align-items: stretch; }
+  .filter-bar > div { min-width: 0; }
+  /* Prevent iOS Safari auto-zoom on form focus */
+  input, select, textarea { font-size: 16px; }
+  .form-actions { flex-wrap: wrap; }
+  .form-actions button { flex: 1; min-width: 130px; }
+}
+
+@media (max-width: 400px) {
+  header.masthead h1 { font-size: 26px; }
+  .stat-card .value { font-size: 20px; }
+}
+
+/* ---- Print ---- */
+@media print {
+  body { background: #fff; padding: 0; display: block; }
+  nav.tabs, .toolbar, .entry-card, .filter-bar, .charts-row, footer.credit, .icon-btn { display: none !important; }
+  .app { max-width: 100%; }
+  header.masthead { margin-bottom: 16px; }
+  .ledger-card { border: none; }
+  table.ledger th { border-bottom: 2px solid #000; }
+  table.ledger td { border-bottom: 1px solid #ccc; }
 }

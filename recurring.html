@@ -10,7 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-config.js"></script>
 </head>
-<body>
+<body class="theme-recurring">
 <div class="app">
 
   <header class="masthead">
@@ -63,6 +63,23 @@
     </div>
 
     <div class="entry-card">
+      <h3>Change password</h3>
+      <div id="pw-error" class="error-msg hidden"></div>
+      <div id="pw-info" class="info-msg hidden"></div>
+      <div class="entry-grid">
+        <div>
+          <label for="new-password">New password</label>
+          <input id="new-password" type="password" placeholder="At least 6 characters" autocomplete="new-password" />
+        </div>
+        <div>
+          <label for="confirm-password">Confirm new password</label>
+          <input id="confirm-password" type="password" placeholder="Re-enter password" autocomplete="new-password" />
+        </div>
+      </div>
+      <button class="btn-secondary" style="width:auto;" id="change-pw-btn">Update password</button>
+    </div>
+
+    <div class="entry-card">
       <h3 id="rec-form-title">Add a recurring expense</h3>
       <div id="rec-error" class="error-msg hidden"></div>
       <input type="hidden" id="editing-id" value="">
@@ -104,22 +121,24 @@
 
     <div class="ledger-card">
       <div class="ledger-header"><h3>Your recurring expenses</h3></div>
-      <table class="ledger">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Category</th>
-            <th>Due day</th>
-            <th class="amount">Amount</th>
-            <th>Email alert</th>
-            <th>Status</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="rec-body">
-          <tr class="empty-row"><td colspan="7">Loading…</td></tr>
-        </tbody>
-      </table>
+      <div class="table-scroll">
+        <table class="ledger">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Category</th>
+              <th>Due day</th>
+              <th class="amount">Amount</th>
+              <th>Email alert</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="rec-body">
+            <tr class="empty-row"><td colspan="7">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -181,6 +200,22 @@ $('save-settings-btn').addEventListener('click', async () => {
     msg.className = 'info-msg'; msg.textContent = 'Saved.';
   }
   setTimeout(() => msg.classList.add('hidden'), 2500);
+});
+
+/* ---------------- CHANGE PASSWORD ---------------- */
+$('change-pw-btn').addEventListener('click', async () => {
+  hideMsg('pw-error'); hideMsg('pw-info');
+  const pw = $('new-password').value;
+  const confirm = $('confirm-password').value;
+  if (pw.length < 6) { showMsg('pw-error', 'Password must be at least 6 characters.'); return; }
+  if (pw !== confirm) { showMsg('pw-error', "Passwords don't match."); return; }
+
+  const { error } = await supabaseClient.auth.updateUser({ password: pw });
+  if (error) { showMsg('pw-error', error.message); return; }
+
+  $('new-password').value = '';
+  $('confirm-password').value = '';
+  showMsg('pw-info', 'Password updated.');
 });
 
 /* ---------------- RECURRING EXPENSES ---------------- */

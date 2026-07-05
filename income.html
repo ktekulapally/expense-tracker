@@ -10,9 +10,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 <script src="supabase-config.js"></script>
 </head>
-<body>
+<body class="theme-income">
 <div class="app">
 
   <header class="masthead">
@@ -37,6 +39,8 @@
       <div class="who">Signed in as <strong id="user-email"></strong></div>
       <div class="actions">
         <button class="btn-ghost" id="export-btn">Export to Excel</button>
+        <button class="btn-ghost" id="export-pdf-btn">Export to PDF</button>
+        <button class="btn-ghost" id="print-btn">Print</button>
         <button class="btn-ghost" id="logout-btn">Sign out</button>
       </div>
     </div>
@@ -97,21 +101,23 @@
         <h3>Entries</h3>
         <select id="month-filter"></select>
       </div>
-      <table class="ledger">
-        <thead>
-          <tr>
-            <th class="num">#</th>
-            <th>Date</th>
-            <th>Source</th>
-            <th>Note</th>
-            <th class="amount">Amount</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="ledger-body">
-          <tr class="empty-row"><td colspan="6">Loading…</td></tr>
-        </tbody>
-      </table>
+      <div class="table-scroll">
+        <table class="ledger">
+          <thead>
+            <tr>
+              <th class="num">#</th>
+              <th>Date</th>
+              <th>Source</th>
+              <th>Note</th>
+              <th class="amount">Amount</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="ledger-body">
+            <tr class="empty-row"><td colspan="6">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -309,6 +315,37 @@ $('export-btn').addEventListener('click', () => {
   XLSX.utils.book_append_sheet(wb, ws, 'Income');
   XLSX.writeFile(wb, `income-${new Date().toISOString().slice(0, 10)}.xlsx`);
 });
+
+/* ---------------- EXPORT TO PDF ---------------- */
+$('export-pdf-btn').addEventListener('click', () => {
+  if (allIncome.length === 0) { alert('No income to export yet.'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  const rows = allIncome.slice().sort((a, b) => a.income_date.localeCompare(b.income_date))
+    .map(i => [i.income_date, i.source, i.notes || '', `Rs. ${Number(i.amount).toFixed(2)}`]);
+  const total = allIncome.reduce((s, i) => s + Number(i.amount), 0);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.text('Ledger — Income Report', 14, 18);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Generated ${new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'long', year: 'numeric' })}`, 14, 25);
+  doc.text(`Total: Rs. ${total.toFixed(2)}  •  ${allIncome.length} entries`, 14, 31);
+
+  doc.autoTable({
+    startY: 38,
+    head: [['Date', 'Source', 'Note', 'Amount']],
+    body: rows,
+    styles: { fontSize: 9 },
+    headStyles: { fillColor: [28, 43, 58] },
+  });
+
+  doc.save(`income-${new Date().toISOString().slice(0, 10)}.pdf`);
+});
+
+/* ---------------- PRINT ---------------- */
+$('print-btn').addEventListener('click', () => window.print());
 </script>
 </body>
 </html>
