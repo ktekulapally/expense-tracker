@@ -79,6 +79,10 @@ reset-password.html                         Completes the forgot-password flow
 styles.css                                  Shared styling for all pages
 supabase-config.js                          Your Supabase URL + anon key (edit once)
 session-guard.js                            1-hour idle auto-logout, shared by all pages
+manifest.json                               Makes the app installable on Android/iOS
+service-worker.js                           Lets the installed app load reliably offline
+icons/icon-192.png, icon-512.png,
+icons/icon-512-maskable.png                 App icons for the home-screen install
 supabase-schema-full.sql                    Full database schema (run once, fresh setup)
 functions/send-recurring-alerts/index.ts    Edge Function that emails reminders
 ```
@@ -300,3 +304,40 @@ Without this, the reset email link will fail when clicked.
 - **Multi-user**: the schema already supports more than one person (every
   row is tied to `auth.users`), it would just mean letting more people sign
   up — no schema changes needed.
+
+## 10. Installing it as an app on Android
+
+The site is already set up as a **Progressive Web App (PWA)** — no separate
+build, no app store needed. Once it's deployed with `manifest.json`,
+`service-worker.js`, and the `icons/` folder uploaded alongside everything
+else:
+
+1. Open the site in **Chrome on Android**.
+2. Tap the **⋮** menu (top right) → **"Install app"** (or **"Add to Home
+   screen"**, wording varies by Chrome version). Chrome may also show this
+   as an automatic banner/prompt after you've visited a couple of times.
+3. Confirm — it installs with the ledger-book icon, and opens full-screen
+   from your home screen/app drawer, with no browser address bar. It looks
+   and behaves like any other installed app.
+
+Everything works exactly the same once installed — same login, same data,
+same Supabase backend. Signing out, editing entries, exporting PDFs, all of
+it, since it's the same app, just launched differently.
+
+**If Chrome doesn't offer the install option:**
+- Make sure `manifest.json`, `service-worker.js`, and the `icons/` folder
+  were actually uploaded to the repo root (not skipped).
+- Reload the page once after uploading — the service worker needs one visit
+  to register before Chrome will offer to install.
+- Confirm you're on `https://` (GitHub Pages always is) — PWAs require it.
+
+**Going further — a real Play Store listing (optional, more involved):**
+If you ever want this listed in the Play Store rather than just installed
+from the browser, that's a separate step called wrapping it as a **Trusted
+Web Activity (TWA)** using Google's `bubblewrap` CLI. It needs an Android
+signing key, a Google Play Console account ($25 one-time), and a small
+`assetlinks.json` file added to your site to prove you own it. Everything
+built here already meets the technical requirements for that path — it's
+just an additional packaging step on top, not a rebuild. Say the word if you
+want to go down that road later.
+
