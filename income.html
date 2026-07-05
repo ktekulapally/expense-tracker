@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ledger — Income</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="supabase-config.js"></script>
+</head>
+<body>
+<div class="app">
+
+  <header class="masthead">
+    <div class="eyebrow">Daily Record</div>
+    <h1>Ledger</h1>
+    <div class="rule"></div>
+  </header>
+
+  <div id="auth-gate" class="auth-card">
+    <h2>Sign in required</h2>
+    <p class="sub">Redirecting you to sign in…</p>
+  </div>
+
+  <div id="dash-view" class="hidden">
+    <nav class="tabs">
+      <a href="index.html">Expenses</a>
+      <a href="income.html" class="active">Income</a>
+      <a href="recurring.html">Recurring &amp; Alerts</a>
+    </nav>
+
+    <div class="toolbar">
+      <div class="who">Signed in as <strong id="user-email"></strong></div>
+      <div class="actions">
+        <button class="btn-ghost" id="export-btn">Export to Excel</button>
+        <button class="btn-ghost" id="logout-btn">Sign out</button>
+      </div>
+    </div>
+
+    <div class="summary-row" style="grid-template-columns: 1fr 1fr;">
+      <div class="stat-card">
+        <div class="label">Income — This Month</div>
+        <div class="value positive" id="month-total">₹0.00</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Income — All Time</div>
+        <div class="value positive" id="all-total">₹0.00</div>
+      </div>
+    </div>
+
+    <div class="entry-card">
+      <h3 id="form-title">Add income</h3>
+      <div id="add-error" class="error-msg hidden"></div>
+      <input type="hidden" id="editing-id" value="">
+      <div class="entry-grid">
+        <div>
+          <label for="inc-date">Date</label>
+          <input id="inc-date" type="date" />
+        </div>
+        <div>
+          <label for="inc-amount">Amount</label>
+          <input id="inc-amount" type="number" step="0.01" min="0" placeholder="0.00" />
+        </div>
+        <div>
+          <label for="inc-source">Source</label>
+          <select id="inc-source">
+            <option>Salary</option>
+            <option>Freelance</option>
+            <option>Investment</option>
+            <option>Gift</option>
+            <option>Refund</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div>
+          <label for="inc-notes">Note</label>
+          <input id="inc-notes" type="text" placeholder="Optional note" />
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn-primary" style="width:auto;" id="add-btn">Add income</button>
+        <button class="btn-ghost hidden" id="cancel-edit-btn">Cancel edit</button>
+      </div>
+    </div>
+
+    <div class="chart-card" style="margin-bottom:24px;">
+      <h4>Last 6 months — income vs expenses</h4>
+      <canvas id="trendChart"></canvas>
+    </div>
+
+    <div class="ledger-card">
+      <div class="ledger-header">
+        <h3>Entries</h3>
+        <select id="month-filter"></select>
+      </div>
+      <table class="ledger">
+        <thead>
+          <tr>
+            <th class="num">#</th>
+            <th>Date</th>
+            <th>Source</th>
+            <th>Note</th>
+            <th class="amount">Amount</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="ledger-body">
+          <tr class="empty-row"><td colspan="6">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer class="credit">Your data is stored in your own Supabase project.</footer>
+</div>
+
+<script>
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let currentUser = null;
+let allIncome = [];
+let allExpenses = [];
+let trendChart = null;
+const $ = (id) => document.getElementById(id);
+
+supabaseClient.auth.onAuthStateChange((_event, session) => {
+  if (session && session.user) {
+    currentUser = session.user;
+    $('auth-gate').classList.add('hidden');
+    $('dash-view').classList.remove('hidden');
+    $('user-email').textContent = currentUser.email;
+    $('inc-date').valueAsDate = new Date();
+    loadAll();
+  } else {
+    window.location.href = 'index.html';
+  }
+});
+
+async function loadAll() {
+  const [incRes, expRes] = await Promise.all([
+    supabaseClient.from('income').select('*').order('income_date', { ascending: false }).order('created_at', { ascending: false }),
+    supabaseClient.from('expenses').select('expense_date, amount')
+  ]);
+  if (incRes.error) console.error(incRes.error);
+  if (expRes.error) console.error(expRes.error);
+  allIncome = incRes.data || [];
+  allExpenses = expRes.data || [];
+  populateMonthFilter();
+  render();
+}
+
+$('add-btn').addEventListener('click', async () => {
+  hideMsg('add-error');
+  const editingId = $('editing-id').value;
+  const income_date = $('inc-date').value;
+  const amount = parseFloat($('inc-amount').value);
+  const source = $('inc-source').value;
+  const notes = $('inc-notes').value.trim();
+
+  if (!income_date || isNaN(amount) || amount <= 0) {
+    showMsg('add-error', 'Enter a valid date and amount.');
+    return;
+  }
+
+  if (editingId) {
+    const { error } = await supabaseClient.from('income').update({ income_date, amount, source, notes }).eq('id', editingId);
+    if (error) { showMsg('add-error', error.message); return; }
+    exitEditMode();
+  } else {
+    const { error } = await supabaseClient.from('income').insert({ user_id: currentUser.id, income_date, amount, source, notes });
+    if (error) { showMsg('add-error', error.message); return; }
+  }
+  $('inc-amount').value = '';
+  $('inc-notes').value = '';
+  await loadAll();
+});
+
+function enterEditMode(inc) {
+  $('editing-id').value = inc.id;
+  $('inc-date').value = inc.income_date;
+  $('inc-amount').value = inc.amount;
+  $('inc-source').value = inc.source;
+  $('inc-notes').value = inc.notes || '';
+  $('form-title').textContent = 'Edit income';
+  $('add-btn').textContent = 'Update entry';
+  $('cancel-edit-btn').classList.remove('hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function exitEditMode() {
+  $('editing-id').value = '';
+  $('inc-date').valueAsDate = new Date();
+  $('inc-amount').value = '';
+  $('inc-notes').value = '';
+  $('form-title').textContent = 'Add income';
+  $('add-btn').textContent = 'Add income';
+  $('cancel-edit-btn').classList.add('hidden');
+}
+$('cancel-edit-btn').addEventListener('click', exitEditMode);
+
+async function deleteIncome(id) {
+  if (!confirm('Delete this entry?')) return;
+  const { error } = await supabaseClient.from('income').delete().eq('id', id);
+  if (error) { alert(error.message); return; }
+  await loadAll();
+}
+async function editIncome(id) {
+  const inc = allIncome.find(i => i.id === id);
+  if (inc) enterEditMode(inc);
+}
+
+function populateMonthFilter() {
+  const months = new Set(allIncome.map(i => i.income_date.slice(0, 7)));
+  const sorted = Array.from(months).sort().reverse();
+  const sel = $('month-filter');
+  const prevVal = sel.value || 'all';
+  sel.innerHTML = '<option value="all">All months</option>' + sorted.map(m => `<option value="${m}">${monthLabel(m)}</option>`).join('');
+  sel.value = sorted.includes(prevVal) ? prevVal : 'all';
+}
+function monthLabel(ym) {
+  const [y, m] = ym.split('-');
+  return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+$('month-filter').addEventListener('change', render);
+
+function currentThisMonthKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function render() {
+  const filterVal = $('month-filter').value;
+  const filtered = filterVal === 'all' ? allIncome : allIncome.filter(i => i.income_date.slice(0, 7) === filterVal);
+  const tbody = $('ledger-body');
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No income logged yet.</td></tr>';
+  } else {
+    tbody.innerHTML = filtered.map((inc, i) => `
+      <tr>
+        <td class="num">${String(filtered.length - i).padStart(3, '0')}</td>
+        <td>${formatDate(inc.income_date)}</td>
+        <td><span class="cat-pill">${escapeHtml(inc.source)}</span></td>
+        <td>${escapeHtml(inc.notes || '—')}</td>
+        <td class="amount">₹${Number(inc.amount).toFixed(2)}</td>
+        <td>
+          <button class="icon-btn" onclick="editIncome('${inc.id}')" title="Edit">✎</button>
+          <button class="icon-btn danger" onclick="deleteIncome('${inc.id}')" title="Delete">✕</button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  const thisMonth = currentThisMonthKey();
+  const monthTotal = allIncome.filter(i => i.income_date.slice(0, 7) === thisMonth).reduce((s, i) => s + Number(i.amount), 0);
+  const allTotal = allIncome.reduce((s, i) => s + Number(i.amount), 0);
+  $('month-total').textContent = `₹${monthTotal.toFixed(2)}`;
+  $('all-total').textContent = `₹${allTotal.toFixed(2)}`;
+
+  renderTrend();
+}
+
+function renderTrend() {
+  const months = [];
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  const incomeVals = months.map(m => allIncome.filter(i => i.income_date.slice(0, 7) === m).reduce((s, i) => s + Number(i.amount), 0));
+  const expenseVals = months.map(m => allExpenses.filter(e => e.expense_date.slice(0, 7) === m).reduce((s, e) => s + Number(e.amount), 0));
+
+  if (trendChart) trendChart.destroy();
+  trendChart = new Chart($('trendChart'), {
+    type: 'bar',
+    data: {
+      labels: months.map(m => monthLabel(m).split(' ')[0]),
+      datasets: [
+        { label: 'Income', data: incomeVals, backgroundColor: '#3f7a5c', borderRadius: 4 },
+        { label: 'Expenses', data: expenseVals, backgroundColor: '#a6432d', borderRadius: 4 }
+      ]
+    },
+    options: { plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } } }, scales: { y: { beginAtZero: true } } }
+  });
+}
+
+function formatDate(iso) {
+  return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+function showMsg(id, text) { const el = $(id); el.textContent = text; el.classList.remove('hidden'); }
+function hideMsg(id) { $(id).classList.add('hidden'); }
+
+$('logout-btn').addEventListener('click', async () => { await supabaseClient.auth.signOut(); window.location.href = 'index.html'; });
+
+$('export-btn').addEventListener('click', () => {
+  if (allIncome.length === 0) { alert('No income to export yet.'); return; }
+  const rows = allIncome.slice().sort((a, b) => a.income_date.localeCompare(b.income_date)).map(i => ({
+    Date: i.income_date, Source: i.source, Note: i.notes || '', Amount: Number(i.amount)
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [{ wch: 12 }, { wch: 16 }, { wch: 34 }, { wch: 12 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Income');
+  XLSX.writeFile(wb, `income-${new Date().toISOString().slice(0, 10)}.xlsx`);
+});
+</script>
+</body>
+</html>

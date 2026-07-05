@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ledger — Expenses</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="supabase-config.js"></script>
+</head>
+<body>
+<div class="app">
+
+  <header class="masthead">
+    <div class="eyebrow">Daily Record</div>
+    <h1>Ledger</h1>
+    <div class="rule"></div>
+  </header>
+
+  <!-- AUTH VIEW -->
+  <div id="auth-view">
+    <div class="auth-card">
+      <h2 id="auth-title">Welcome back</h2>
+      <p class="sub" id="auth-sub">Sign in to your ledger.</p>
+      <div id="auth-error" class="error-msg hidden"></div>
+      <div id="auth-info" class="info-msg hidden"></div>
+      <label for="email">Email</label>
+      <input id="email" type="email" placeholder="you@example.com" autocomplete="username" />
+      <label for="password">Password</label>
+      <input id="password" type="password" placeholder="••••••••" autocomplete="current-password" />
+      <button class="btn-primary" id="auth-submit">Sign in</button>
+      <div class="auth-toggle">
+        <span id="auth-toggle-text">New here?</span>
+        <a id="auth-toggle-link">Create an account</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD VIEW -->
+  <div id="dash-view" class="hidden">
+    <nav class="tabs">
+      <a href="index.html" class="active">Expenses</a>
+      <a href="income.html">Income</a>
+      <a href="recurring.html">Recurring &amp; Alerts</a>
+    </nav>
+
+    <div class="toolbar">
+      <div class="who">Signed in as <strong id="user-email"></strong></div>
+      <div class="actions">
+        <button class="btn-ghost" id="export-btn">Export to Excel</button>
+        <button class="btn-ghost" id="logout-btn">Sign out</button>
+      </div>
+    </div>
+
+    <div class="summary-row">
+      <div class="stat-card">
+        <div class="label">Expenses — This Month</div>
+        <div class="value" id="month-total">₹0.00</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Income — This Month</div>
+        <div class="value positive" id="month-income">₹0.00</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Net — This Month</div>
+        <div class="value" id="month-net">₹0.00</div>
+      </div>
+    </div>
+
+    <div class="entry-card">
+      <h3 id="form-title">Add an expense</h3>
+      <div id="add-error" class="error-msg hidden"></div>
+      <input type="hidden" id="editing-id" value="">
+      <div class="entry-grid">
+        <div>
+          <label for="exp-date">Date</label>
+          <input id="exp-date" type="date" />
+        </div>
+        <div>
+          <label for="exp-amount">Amount</label>
+          <input id="exp-amount" type="number" step="0.01" min="0" placeholder="0.00" />
+        </div>
+        <div>
+          <label for="exp-category">Category</label>
+          <select id="exp-category">
+            <option>Food</option>
+            <option>Transport</option>
+            <option>Bills</option>
+            <option>Shopping</option>
+            <option>Health</option>
+            <option>Entertainment</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div>
+          <label for="exp-desc">Note</label>
+          <input id="exp-desc" type="text" placeholder="Optional description" />
+        </div>
+      </div>
+
+      <div id="recurring-toggle-wrap" class="checkbox-row">
+        <input type="checkbox" id="make-recurring" />
+        <label for="make-recurring">Also set this up as a monthly recurring expense (with reminder)</label>
+      </div>
+
+      <div id="recurring-extra" class="entry-grid hidden">
+        <div>
+          <label for="rec-day">Payment day of month</label>
+          <select id="rec-day"></select>
+        </div>
+        <div class="checkbox-row" style="align-items:center; margin-top:28px;">
+          <input type="checkbox" id="rec-notify-email" checked />
+          <label for="rec-notify-email">Email me the day before</label>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn-primary" style="width:auto;" id="add-btn">Add entry</button>
+        <button class="btn-ghost hidden" id="cancel-edit-btn">Cancel edit</button>
+      </div>
+    </div>
+
+    <div class="charts-row">
+      <div class="chart-card">
+        <h4>Spending by category (filtered view)</h4>
+        <canvas id="categoryChart"></canvas>
+      </div>
+      <div class="chart-card">
+        <h4>Last 6 months</h4>
+        <canvas id="trendChart"></canvas>
+      </div>
+    </div>
+
+    <div class="ledger-card">
+      <div class="ledger-header">
+        <h3>Entries</h3>
+      </div>
+      <div style="padding: 14px 22px 0;">
+        <div class="filter-bar">
+          <div>
+            <label for="search-box">Search</label>
+            <input id="search-box" type="text" placeholder="Search notes or category…" />
+          </div>
+          <div>
+            <label for="category-filter">Category</label>
+            <select id="category-filter"><option value="all">All categories</option></select>
+          </div>
+          <div>
+            <label for="month-filter">Month</label>
+            <select id="month-filter"></select>
+          </div>
+        </div>
+      </div>
+      <table class="ledger">
+        <thead>
+          <tr>
+            <th class="num">#</th>
+            <th>Date</th>
+            <th>Category</th>
+            <th>Note</th>
+            <th class="amount">Amount</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="ledger-body">
+          <tr class="empty-row"><td colspan="6">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer class="credit">Your data is stored in your own Supabase project.</footer>
+</div>
+
+<script>
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let currentUser = null;
+let allExpenses = [];
+let allIncome = [];
+let isSignupMode = false;
+let categoryChart = null;
+let trendChart = null;
+
+const $ = (id) => document.getElementById(id);
+
+/* Populate the payment-day dropdown 1-31 */
+(function populateDayOptions() {
+  const sel = $('rec-day');
+  for (let d = 1; d <= 31; d++) {
+    const opt = document.createElement('option');
+    opt.value = d; opt.textContent = d;
+    sel.appendChild(opt);
+  }
+})();
+
+$('make-recurring').addEventListener('change', (e) => {
+  $('recurring-extra').classList.toggle('hidden', !e.target.checked);
+});
+
+/* ---------------- AUTH ---------------- */
+$('auth-toggle-link').addEventListener('click', () => {
+  isSignupMode = !isSignupMode;
+  $('auth-title').textContent = isSignupMode ? 'Create your ledger' : 'Welcome back';
+  $('auth-sub').textContent = isSignupMode ? 'Set up your account to start tracking.' : 'Sign in to your ledger.';
+  $('auth-submit').textContent = isSignupMode ? 'Create account' : 'Sign in';
+  $('auth-toggle-text').textContent = isSignupMode ? 'Already have an account?' : 'New here?';
+  $('auth-toggle-link').textContent = isSignupMode ? 'Sign in' : 'Create an account';
+  hideMsg('auth-error'); hideMsg('auth-info');
+});
+
+$('auth-submit').addEventListener('click', async () => {
+  const email = $('email').value.trim();
+  const password = $('password').value;
+  hideMsg('auth-error'); hideMsg('auth-info');
+  if (!email || !password) { showMsg('auth-error', 'Enter both email and password.'); return; }
+
+  if (isSignupMode) {
+    const { error } = await supabaseClient.auth.signUp({ email, password });
+    if (error) { showMsg('auth-error', error.message); return; }
+    showMsg('auth-info', 'Account created. Check your email if confirmation is required, then sign in.');
+  } else {
+    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) { showMsg('auth-error', error.message); return; }
+  }
+});
+
+$('logout-btn').addEventListener('click', async () => { await supabaseClient.auth.signOut(); });
+
+supabaseClient.auth.onAuthStateChange((_event, session) => {
+  if (session && session.user) {
+    currentUser = session.user;
+    $('auth-view').classList.add('hidden');
+    $('dash-view').classList.remove('hidden');
+    $('user-email').textContent = currentUser.email;
+    $('exp-date').valueAsDate = new Date();
+    loadAll();
+  } else {
+    currentUser = null;
+    $('dash-view').classList.add('hidden');
+    $('auth-view').classList.remove('hidden');
+  }
+});
+
+function showMsg(id, text) { const el = $(id); el.textContent = text; el.classList.remove('hidden'); }
+function hideMsg(id) { $(id).classList.add('hidden'); }
+
+/* ---------------- LOAD ---------------- */
+async function loadAll() {
+  const [expRes, incRes] = await Promise.all([
+    supabaseClient.from('expenses').select('*').order('expense_date', { ascending: false }).order('created_at', { ascending: false }),
+    supabaseClient.from('income').select('*')
+  ]);
+  if (expRes.error) console.error(expRes.error);
+  if (incRes.error) console.error(incRes.error);
+  allExpenses = expRes.data || [];
+  allIncome = incRes.data || [];
+  populateFilters();
+  render();
+}
+
+/* ---------------- ADD / EDIT / DELETE EXPENSE ---------------- */
+$('add-btn').addEventListener('click', async () => {
+  hideMsg('add-error');
+  const editingId = $('editing-id').value;
+  const expense_date = $('exp-date').value;
+  const amount = parseFloat($('exp-amount').value);
+  const category = $('exp-category').value;
+  const description = $('exp-desc').value.trim();
+
+  if (!expense_date || isNaN(amount) || amount <= 0) {
+    showMsg('add-error', 'Enter a valid date and amount.');
+    return;
+  }
+
+  if (editingId) {
+    const { error } = await supabaseClient.from('expenses')
+      .update({ expense_date, amount, category, description })
+      .eq('id', editingId);
+    if (error) { showMsg('add-error', error.message); return; }
+    exitEditMode();
+  } else {
+    const { data, error } = await supabaseClient.from('expenses')
+      .insert({ user_id: currentUser.id, expense_date, amount, category, description })
+      .select().single();
+    if (error) { showMsg('add-error', error.message); return; }
+
+    if ($('make-recurring').checked) {
+      const payment_day = parseInt($('rec-day').value, 10);
+      const notify_email = $('rec-notify-email').checked;
+      const name = description || category;
+      const { data: recData, error: recErr } = await supabaseClient.from('recurring_expenses')
+        .insert({ user_id: currentUser.id, name, category, amount, payment_day, notify_email })
+        .select().single();
+      if (!recErr && recData) {
+        await supabaseClient.from('expenses').update({ recurring_id: recData.id }).eq('id', data.id);
+      }
+    }
+    $('make-recurring').checked = false;
+    $('recurring-extra').classList.add('hidden');
+  }
+
+  $('exp-amount').value = '';
+  $('exp-desc').value = '';
+  await loadAll();
+});
+
+function enterEditMode(exp) {
+  $('editing-id').value = exp.id;
+  $('exp-date').value = exp.expense_date;
+  $('exp-amount').value = exp.amount;
+  $('exp-category').value = exp.category;
+  $('exp-desc').value = exp.description || '';
+  $('form-title').textContent = 'Edit expense';
+  $('add-btn').textContent = 'Update entry';
+  $('cancel-edit-btn').classList.remove('hidden');
+  $('recurring-toggle-wrap').classList.add('hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function exitEditMode() {
+  $('editing-id').value = '';
+  $('exp-date').valueAsDate = new Date();
+  $('exp-amount').value = '';
+  $('exp-desc').value = '';
+  $('exp-category').value = 'Food';
+  $('form-title').textContent = 'Add an expense';
+  $('add-btn').textContent = 'Add entry';
+  $('cancel-edit-btn').classList.add('hidden');
+  $('recurring-toggle-wrap').classList.remove('hidden');
+}
+$('cancel-edit-btn').addEventListener('click', exitEditMode);
+
+async function deleteExpense(id) {
+  if (!confirm('Delete this entry?')) return;
+  const { error } = await supabaseClient.from('expenses').delete().eq('id', id);
+  if (error) { alert(error.message); return; }
+  await loadAll();
+}
+async function editExpense(id) {
+  const exp = allExpenses.find(e => e.id === id);
+  if (exp) enterEditMode(exp);
+}
+
+/* ---------------- FILTERS ---------------- */
+function populateFilters() {
+  const months = new Set(allExpenses.map(e => e.expense_date.slice(0, 7)));
+  const sorted = Array.from(months).sort().reverse();
+  const monthSel = $('month-filter');
+  const prevMonth = monthSel.value || 'all';
+  monthSel.innerHTML = '<option value="all">All months</option>' + sorted.map(m => `<option value="${m}">${monthLabel(m)}</option>`).join('');
+  monthSel.value = sorted.includes(prevMonth) ? prevMonth : 'all';
+
+  const cats = Array.from(new Set(allExpenses.map(e => e.category))).sort();
+  const catSel = $('category-filter');
+  const prevCat = catSel.value || 'all';
+  catSel.innerHTML = '<option value="all">All categories</option>' + cats.map(c => `<option value="${c}">${c}</option>`).join('');
+  catSel.value = cats.includes(prevCat) ? prevCat : 'all';
+}
+function monthLabel(ym) {
+  const [y, m] = ym.split('-');
+  return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+['month-filter', 'category-filter', 'search-box'].forEach(id => {
+  $(id).addEventListener('input', render);
+  $(id).addEventListener('change', render);
+});
+
+function getFiltered() {
+  const monthVal = $('month-filter').value;
+  const catVal = $('category-filter').value;
+  const q = $('search-box').value.trim().toLowerCase();
+  return allExpenses.filter(e => {
+    if (monthVal !== 'all' && e.expense_date.slice(0, 7) !== monthVal) return false;
+    if (catVal !== 'all' && e.category !== catVal) return false;
+    if (q && !((e.description || '').toLowerCase().includes(q) || e.category.toLowerCase().includes(q))) return false;
+    return true;
+  });
+}
+
+function currentThisMonthKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/* ---------------- RENDER ---------------- */
+function render() {
+  const filtered = getFiltered();
+  const tbody = $('ledger-body');
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No entries match. Try adjusting filters.</td></tr>';
+  } else {
+    tbody.innerHTML = filtered.map((e, i) => `
+      <tr>
+        <td class="num">${String(filtered.length - i).padStart(3, '0')}</td>
+        <td>${formatDate(e.expense_date)}</td>
+        <td><span class="cat-pill">${escapeHtml(e.category)}</span>${e.recurring_id ? '<span class="rec-badge">Recurring</span>' : ''}</td>
+        <td>${escapeHtml(e.description || '—')}</td>
+        <td class="amount">₹${Number(e.amount).toFixed(2)}</td>
+        <td>
+          <button class="icon-btn" onclick="editExpense('${e.id}')" title="Edit">✎</button>
+          <button class="icon-btn danger" onclick="deleteExpense('${e.id}')" title="Delete">✕</button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  const thisMonth = currentThisMonthKey();
+  const monthExpenseTotal = allExpenses.filter(e => e.expense_date.slice(0, 7) === thisMonth).reduce((s, e) => s + Number(e.amount), 0);
+  const monthIncomeTotal = allIncome.filter(inc => inc.income_date.slice(0, 7) === thisMonth).reduce((s, inc) => s + Number(inc.amount), 0);
+  const net = monthIncomeTotal - monthExpenseTotal;
+
+  $('month-total').textContent = `₹${monthExpenseTotal.toFixed(2)}`;
+  $('month-income').textContent = `₹${monthIncomeTotal.toFixed(2)}`;
+  const netEl = $('month-net');
+  netEl.textContent = `${net < 0 ? '-' : ''}₹${Math.abs(net).toFixed(2)}`;
+  netEl.className = 'value ' + (net >= 0 ? 'positive' : 'negative');
+
+  renderCharts(filtered);
+}
+
+function renderCharts(filtered) {
+  const byCategory = {};
+  filtered.forEach(e => { byCategory[e.category] = (byCategory[e.category] || 0) + Number(e.amount); });
+  const catLabels = Object.keys(byCategory);
+  const catValues = Object.values(byCategory);
+
+  if (categoryChart) categoryChart.destroy();
+  categoryChart = new Chart($('categoryChart'), {
+    type: 'doughnut',
+    data: {
+      labels: catLabels,
+      datasets: [{ data: catValues, backgroundColor: ['#1c2b3a', '#b9863f', '#3f7a5c', '#a6432d', '#7a8c99', '#c9a86a', '#5c7a6a'] }]
+    },
+    options: { plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } } } }
+  });
+
+  const months = [];
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  const trendValues = months.map(m => allExpenses.filter(e => e.expense_date.slice(0, 7) === m).reduce((s, e) => s + Number(e.amount), 0));
+
+  if (trendChart) trendChart.destroy();
+  trendChart = new Chart($('trendChart'), {
+    type: 'bar',
+    data: {
+      labels: months.map(m => monthLabel(m).split(' ')[0]),
+      datasets: [{ data: trendValues, backgroundColor: '#b9863f', borderRadius: 4 }]
+    },
+    options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  });
+}
+
+function formatDate(iso) {
+  return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+/* ---------------- EXPORT TO EXCEL ---------------- */
+$('export-btn').addEventListener('click', () => {
+  if (allExpenses.length === 0) { alert('No expenses to export yet.'); return; }
+  const rows = allExpenses.slice().sort((a, b) => a.expense_date.localeCompare(b.expense_date)).map(e => ({
+    Date: e.expense_date, Category: e.category, Note: e.description || '', Amount: Number(e.amount), Recurring: e.recurring_id ? 'Yes' : 'No'
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [{ wch: 12 }, { wch: 16 }, { wch: 34 }, { wch: 12 }, { wch: 10 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Expenses');
+  XLSX.writeFile(wb, `expenses-${new Date().toISOString().slice(0, 10)}.xlsx`);
+});
+</script>
+</body>
+</html>

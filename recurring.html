@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ledger — Recurring &amp; Alerts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+</head>
+<body>
+<div class="app">
+
+  <header class="masthead">
+    <div class="eyebrow">Daily Record</div>
+    <h1>Ledger</h1>
+    <div class="rule"></div>
+  </header>
+
+  <div id="auth-gate" class="auth-card">
+    <h2>Sign in required</h2>
+    <p class="sub">Redirecting you to sign in…</p>
+  </div>
+
+  <div id="dash-view" class="hidden">
+    <nav class="tabs">
+      <a href="index.html">Expenses</a>
+      <a href="income.html">Income</a>
+      <a href="recurring.html" class="active">Recurring &amp; Alerts</a>
+    </nav>
+
+    <div class="toolbar">
+      <div class="who">Signed in as <strong id="user-email"></strong></div>
+      <div class="actions">
+        <button class="btn-ghost" id="logout-btn">Sign out</button>
+      </div>
+    </div>
+
+    <div class="entry-card">
+      <h3>Alert settings</h3>
+      <p style="color:var(--ink-soft); font-size:13px; margin-top:-8px;">
+        Where should reminders go? Email alerts go out the day before each recurring payment is due.
+        SMS is not wired up yet — the field is here so it's ready when you add it later.
+      </p>
+      <div id="settings-msg" class="info-msg hidden"></div>
+      <div class="entry-grid">
+        <div>
+          <label for="alert-email">Alert email</label>
+          <input id="alert-email" type="email" placeholder="you@example.com" />
+        </div>
+        <div>
+          <label for="phone-number">Phone number <span style="text-transform:none; font-weight:400;">(for future SMS)</span></label>
+          <input id="phone-number" type="tel" placeholder="+91 90000 00000" />
+        </div>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="sms-enabled" disabled />
+        <label for="sms-enabled">Send SMS alerts too (coming soon)</label>
+      </div>
+      <button class="btn-secondary" style="width:auto;" id="save-settings-btn">Save alert settings</button>
+    </div>
+
+    <div class="entry-card">
+      <h3 id="rec-form-title">Add a recurring expense</h3>
+      <div id="rec-error" class="error-msg hidden"></div>
+      <input type="hidden" id="editing-id" value="">
+      <div class="entry-grid">
+        <div>
+          <label for="rec-name">Name</label>
+          <input id="rec-name" type="text" placeholder="e.g. Internet bill" />
+        </div>
+        <div>
+          <label for="rec-amount">Amount</label>
+          <input id="rec-amount" type="number" step="0.01" min="0" placeholder="0.00" />
+        </div>
+        <div>
+          <label for="rec-category">Category</label>
+          <select id="rec-category">
+            <option>Bills</option>
+            <option>Food</option>
+            <option>Transport</option>
+            <option>Shopping</option>
+            <option>Health</option>
+            <option>Entertainment</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div>
+          <label for="rec-day">Payment day of month</label>
+          <select id="rec-day"></select>
+        </div>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="rec-notify-email" checked />
+        <label for="rec-notify-email">Email me a reminder the day before</label>
+      </div>
+      <div class="form-actions">
+        <button class="btn-primary" style="width:auto;" id="rec-save-btn">Add recurring expense</button>
+        <button class="btn-ghost hidden" id="rec-cancel-btn">Cancel edit</button>
+      </div>
+    </div>
+
+    <div class="ledger-card">
+      <div class="ledger-header"><h3>Your recurring expenses</h3></div>
+      <table class="ledger">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Category</th>
+            <th>Due day</th>
+            <th class="amount">Amount</th>
+            <th>Email alert</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="rec-body">
+          <tr class="empty-row"><td colspan="7">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer class="credit">Your data is stored in your own Supabase project.</footer>
+</div>
+
+<script>
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let currentUser = null;
+let allRecurring = [];
+const $ = (id) => document.getElementById(id);
+
+(function populateDayOptions() {
+  const sel = $('rec-day');
+  for (let d = 1; d <= 31; d++) {
+    const opt = document.createElement('option');
+    opt.value = d; opt.textContent = d;
+    sel.appendChild(opt);
+  }
+})();
+
+supabaseClient.auth.onAuthStateChange((_event, session) => {
+  if (session && session.user) {
+    currentUser = session.user;
+    $('auth-gate').classList.add('hidden');
+    $('dash-view').classList.remove('hidden');
+    $('user-email').textContent = currentUser.email;
+    $('alert-email').value = currentUser.email;
+    loadSettings();
+    loadRecurring();
+  } else {
+    window.location.href = 'index.html';
+  }
+});
+
+$('logout-btn').addEventListener('click', async () => { await supabaseClient.auth.signOut(); window.location.href = 'index.html'; });
+
+/* ---------------- SETTINGS ---------------- */
+async function loadSettings() {
+  const { data, error } = await supabaseClient.from('notification_settings').select('*').eq('user_id', currentUser.id).maybeSingle();
+  if (error) { console.error(error); return; }
+  if (data) {
+    $('alert-email').value = data.alert_email || currentUser.email;
+    $('phone-number').value = data.phone_number || '';
+    $('sms-enabled').checked = data.sms_enabled;
+  }
+}
+
+$('save-settings-btn').addEventListener('click', async () => {
+  const alert_email = $('alert-email').value.trim() || currentUser.email;
+  const phone_number = $('phone-number').value.trim();
+  const { error } = await supabaseClient.from('notification_settings').upsert({
+    user_id: currentUser.id, alert_email, phone_number, sms_enabled: false
+  });
+  const msg = $('settings-msg');
+  if (error) {
+    msg.className = 'error-msg'; msg.textContent = error.message;
+  } else {
+    msg.className = 'info-msg'; msg.textContent = 'Saved.';
+  }
+  setTimeout(() => msg.classList.add('hidden'), 2500);
+});
+
+/* ---------------- RECURRING EXPENSES ---------------- */
+async function loadRecurring() {
+  const { data, error } = await supabaseClient.from('recurring_expenses').select('*').order('payment_day', { ascending: true });
+  if (error) { console.error(error); return; }
+  allRecurring = data || [];
+  renderRecurring();
+}
+
+$('rec-save-btn').addEventListener('click', async () => {
+  hideMsg('rec-error');
+  const editingId = $('editing-id').value;
+  const name = $('rec-name').value.trim();
+  const amount = parseFloat($('rec-amount').value);
+  const category = $('rec-category').value;
+  const payment_day = parseInt($('rec-day').value, 10);
+  const notify_email = $('rec-notify-email').checked;
+
+  if (!name || isNaN(amount) || amount <= 0) {
+    showMsg('rec-error', 'Enter a name and a valid amount.');
+    return;
+  }
+
+  if (editingId) {
+    const { error } = await supabaseClient.from('recurring_expenses')
+      .update({ name, amount, category, payment_day, notify_email })
+      .eq('id', editingId);
+    if (error) { showMsg('rec-error', error.message); return; }
+    exitEditMode();
+  } else {
+    const { error } = await supabaseClient.from('recurring_expenses')
+      .insert({ user_id: currentUser.id, name, amount, category, payment_day, notify_email });
+    if (error) { showMsg('rec-error', error.message); return; }
+    $('rec-name').value = '';
+    $('rec-amount').value = '';
+  }
+  await loadRecurring();
+});
+
+function enterEditMode(rec) {
+  $('editing-id').value = rec.id;
+  $('rec-name').value = rec.name;
+  $('rec-amount').value = rec.amount;
+  $('rec-category').value = rec.category;
+  $('rec-day').value = rec.payment_day;
+  $('rec-notify-email').checked = rec.notify_email;
+  $('rec-form-title').textContent = 'Edit recurring expense';
+  $('rec-save-btn').textContent = 'Update recurring expense';
+  $('rec-cancel-btn').classList.remove('hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function exitEditMode() {
+  $('editing-id').value = '';
+  $('rec-name').value = '';
+  $('rec-amount').value = '';
+  $('rec-category').value = 'Bills';
+  $('rec-day').value = '1';
+  $('rec-notify-email').checked = true;
+  $('rec-form-title').textContent = 'Add a recurring expense';
+  $('rec-save-btn').textContent = 'Add recurring expense';
+  $('rec-cancel-btn').classList.add('hidden');
+}
+$('rec-cancel-btn').addEventListener('click', exitEditMode);
+
+async function toggleActive(id, current) {
+  const { error } = await supabaseClient.from('recurring_expenses').update({ active: !current }).eq('id', id);
+  if (error) { alert(error.message); return; }
+  await loadRecurring();
+}
+async function deleteRecurring(id) {
+  if (!confirm('Delete this recurring expense? This does not delete past logged expenses.')) return;
+  const { error } = await supabaseClient.from('recurring_expenses').delete().eq('id', id);
+  if (error) { alert(error.message); return; }
+  await loadRecurring();
+}
+function editRecurring(id) {
+  const rec = allRecurring.find(r => r.id === id);
+  if (rec) enterEditMode(rec);
+}
+
+function renderRecurring() {
+  const tbody = $('rec-body');
+  if (allRecurring.length === 0) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="7">No recurring expenses set up yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = allRecurring.map(r => `
+    <tr>
+      <td>${escapeHtml(r.name)}</td>
+      <td><span class="cat-pill">${escapeHtml(r.category)}</span></td>
+      <td>${ordinal(r.payment_day)}</td>
+      <td class="amount">₹${Number(r.amount).toFixed(2)}</td>
+      <td>${r.notify_email ? 'On' : 'Off'}</td>
+      <td><span class="toggle-pill ${r.active ? 'on' : 'off'}" onclick="toggleActive('${r.id}', ${r.active})">${r.active ? 'Active' : 'Paused'}</span></td>
+      <td>
+        <button class="icon-btn" onclick="editRecurring('${r.id}')" title="Edit">✎</button>
+        <button class="icon-btn danger" onclick="deleteRecurring('${r.id}')" title="Delete">✕</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function ordinal(n) {
+  const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+function showMsg(id, text) { const el = $(id); el.textContent = text; el.classList.remove('hidden'); }
+function hideMsg(id) { $(id).classList.add('hidden'); }
+</script>
+</body>
+</html>
