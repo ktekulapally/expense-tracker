@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Personal Ledger — Custom Ledgers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=2">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1c2b3a">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+<script src="session-guard.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('service-worker.js').catch(() => {});
+  });
+}
+</script>
+</head>
+<body class="theme-ledgers">
+<div class="app">
+
+  <header class="masthead">
+    <div class="eyebrow">Daily Record</div>
+    <h1>Personal Ledger</h1>
+    <div class="rule"></div>
+  </header>
+
+  <div id="auth-gate" class="auth-card">
+    <h2>Sign in required</h2>
+    <p class="sub">Redirecting you to sign in…</p>
+  </div>
+
+  <div id="dash-view" class="hidden">
+    <nav class="tabs">
+      <a href="index.html">Expenses</a>
+      <a href="income.html">Income</a>
+      <a href="ledgers.html" class="active">Custom Ledgers</a>
+      <a href="recurring.html">Recurring &amp; Alerts</a>
+    </nav>
+
+    <div class="toolbar">
+      <div class="who">Signed in as <strong id="user-email"></strong></div>
+      <div class="actions">
+        <button class="btn-ghost" id="logout-btn">Sign out</button>
+      </div>
+    </div>
+
+    <div class="entry-card">
+      <h3>What's a custom ledger?</h3>
+      <p style="color:var(--ink-soft); font-size:13px; margin-top:-8px;">
+        A separate book for a specific area of your life — like Agriculture or
+        Education — with its own categories and its own totals. Entries here
+        never mix into your main Expenses/Income numbers.
+      </p>
+      <div id="add-error" class="error-msg hidden"></div>
+      <div class="entry-grid">
+        <div class="full">
+          <label for="ledger-name">Name</label>
+          <input id="ledger-name" type="text" placeholder="e.g. Agriculture, Education, Rental Property" />
+        </div>
+      </div>
+      <button class="btn-primary" style="width:auto;" id="add-ledger-btn">Create ledger</button>
+    </div>
+
+    <div class="ledger-card">
+      <div class="ledger-header"><h3>Your ledgers</h3></div>
+      <div id="ledgers-list" style="padding: 16px 22px 22px; display:grid; gap:12px;">
+        <p style="color:var(--ink-soft); font-style:italic;">Loading…</p>
+      </div>
+    </div>
+  </div>
+
+  <footer class="credit">Your data is stored in your own Supabase project.</footer>
+</div>
+
+<script>
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+installIdleGuard(supabaseClient);
+
+let currentUser = null;
+const $ = (id) => document.getElementById(id);
+
+supabaseClient.auth.onAuthStateChange((_event, session) => {
+  if (session && session.user) {
+    currentUser = session.user;
+    $('auth-gate').classList.add('hidden');
+    $('dash-view').classList.remove('hidden');
+    $('user-email').textContent = currentUser.email;
+    loadLedgers();
+  } else {
+    window.location.href = 'index.html';
+  }
+});
+
+$('logout-btn').addEventListener('click', async () => { await supabaseClient.auth.signOut(); window.location.href = 'index.html'; });
+
+function showMsg(id, text) { const el = $(id); el.textContent = text; el.classList.remove('hidden'); }
+function hideMsg(id) { $(id).classList.add('hidden'); }
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+async function loadLedgers() {
+  const { data: ledgers, error } = await supabaseClient.from('ledgers').select('*').order('created_at', { ascending: true });
+  if (error) { console.error(error); return; }
+
+  if (!ledgers || ledgers.length === 0) {
+    $('ledgers-list').innerHTML = '<p style="color:var(--ink-soft); font-style:italic;">No custom ledgers yet — create one above.</p>';
+    return;
+  }
+
+  // Pull totals for each ledger in parallel
+  const withTotals = await Promise.all(ledgers.map(async (l) => {
+    const [expRes, incRes] = await Promise.all([
+      supabaseClient.from('expenses').select('amount').eq('ledger_id', l.id),
+      supabaseClient.from('income').select('amount').eq('ledger_id', l.id),
+    ]);
+    const totalExpense = (expRes.data || []).reduce((s, e) => s + Number(e.amount), 0);
+    const totalIncome = (incRes.data || []).reduce((s, i) => s + Number(i.amount), 0);
+    return { ...l, totalExpense, totalIncome };
+  }));
+
+  $('ledgers-list').innerHTML = withTotals.map(l => `
+    <div style="border:1px solid var(--paper-line); border-radius:8px; padding:16px 18px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; background:#fff;">
+      <div>
+        <div style="font-family:'Fraunces',serif; font-size:17px; font-weight:600;">${escapeHtml(l.name)}</div>
+        <div style="font-size:13px; color:var(--ink-soft); margin-top:4px; font-family:'IBM Plex Mono',monospace;">
+          Income ₹${l.totalIncome.toFixed(2)} · Expenses ₹${l.totalExpense.toFixed(2)}
+        </div>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <a class="btn-secondary" style="text-decoration:none; display:inline-block;" href="ledger.html?id=${l.id}">Open →</a>
+        <button class="icon-btn danger" onclick="deleteLedger('${l.id}', '${escapeHtml(l.name).replace(/'/g, "\\'")}')" title="Delete">✕</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+$('add-ledger-btn').addEventListener('click', async () => {
+  hideMsg('add-error');
+  const name = $('ledger-name').value.trim();
+  if (!name) { showMsg('add-error', 'Give your ledger a name.'); return; }
+
+  const { error } = await supabaseClient.from('ledgers').insert({ user_id: currentUser.id, name });
+  if (error) { showMsg('add-error', error.message); return; }
+
+  $('ledger-name').value = '';
+  await loadLedgers();
+});
+
+async function deleteLedger(id, name) {
+  if (!confirm(`Delete "${name}"? This permanently deletes every entry and category in it. This cannot be undone.`)) return;
+  const { error } = await supabaseClient.from('ledgers').delete().eq('id', id);
+  if (error) { alert(error.message); return; }
+  await loadLedgers();
+}
+</script>
+</body>
+</html>

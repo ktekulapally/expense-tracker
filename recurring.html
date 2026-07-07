@@ -3,20 +3,31 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Ledger — Recurring &amp; Alerts</title>
+<title>Personal Ledger — Recurring &amp; Alerts</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css?v=2">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1c2b3a">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase-config.js"></script>
 <script src="session-guard.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('service-worker.js').catch(() => {});
+  });
+}
+</script>
 </head>
 <body class="theme-recurring">
 <div class="app">
 
   <header class="masthead">
     <div class="eyebrow">Daily Record</div>
-    <h1>Ledger</h1>
+    <h1>Personal Ledger</h1>
     <div class="rule"></div>
   </header>
 
@@ -29,6 +40,7 @@
     <nav class="tabs">
       <a href="index.html">Expenses</a>
       <a href="income.html">Income</a>
+      <a href="ledgers.html">Custom Ledgers</a>
       <a href="recurring.html" class="active">Recurring &amp; Alerts</a>
     </nav>
 
@@ -64,23 +76,6 @@
     </div>
 
     <div class="entry-card">
-      <h3>Change password</h3>
-      <div id="pw-error" class="error-msg hidden"></div>
-      <div id="pw-info" class="info-msg hidden"></div>
-      <div class="entry-grid">
-        <div>
-          <label for="new-password">New password</label>
-          <input id="new-password" type="password" placeholder="At least 6 characters" autocomplete="new-password" />
-        </div>
-        <div>
-          <label for="confirm-password">Confirm new password</label>
-          <input id="confirm-password" type="password" placeholder="Re-enter password" autocomplete="new-password" />
-        </div>
-      </div>
-      <button class="btn-secondary" style="width:auto;" id="change-pw-btn">Update password</button>
-    </div>
-
-    <div class="entry-card">
       <h3 id="rec-form-title">Add a recurring expense</h3>
       <div id="rec-error" class="error-msg hidden"></div>
       <input type="hidden" id="editing-id" value="">
@@ -98,10 +93,13 @@
           <select id="rec-category">
             <option>Bills</option>
             <option>Food</option>
+            <option>Groceries</option>
+            <option>Fuel</option>
             <option>Transport</option>
             <option>Shopping</option>
             <option>Health</option>
             <option>Entertainment</option>
+            <option>Adhoc</option>
             <option>Other</option>
           </select>
         </div>
@@ -202,22 +200,6 @@ $('save-settings-btn').addEventListener('click', async () => {
     msg.className = 'info-msg'; msg.textContent = 'Saved.';
   }
   setTimeout(() => msg.classList.add('hidden'), 2500);
-});
-
-/* ---------------- CHANGE PASSWORD ---------------- */
-$('change-pw-btn').addEventListener('click', async () => {
-  hideMsg('pw-error'); hideMsg('pw-info');
-  const pw = $('new-password').value;
-  const confirm = $('confirm-password').value;
-  if (pw.length < 6) { showMsg('pw-error', 'Password must be at least 6 characters.'); return; }
-  if (pw !== confirm) { showMsg('pw-error', "Passwords don't match."); return; }
-
-  const { error } = await supabaseClient.auth.updateUser({ password: pw });
-  if (error) { showMsg('pw-error', error.message); return; }
-
-  $('new-password').value = '';
-  $('confirm-password').value = '';
-  showMsg('pw-info', 'Password updated.');
 });
 
 /* ---------------- RECURRING EXPENSES ---------------- */

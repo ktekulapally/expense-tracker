@@ -1,6 +1,6 @@
 {
-  "name": "Ledger — Expense Tracker",
-  "short_name": "Ledger",
+  "name": "Personal Ledger",
+  "short_name": "Personal Ledger",
   "description": "Track daily expenses, income, and recurring bills with email reminders.",
   "start_url": "./index.html",
   "scope": "./",
