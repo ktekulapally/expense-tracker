@@ -222,6 +222,7 @@ supabaseClient.auth.onAuthStateChange((_event, session) => {
   if (session && session.user) {
     currentUser = session.user;
     $('auth-gate').classList.add('hidden');
+    $('dash-view').classList.remove('hidden');
     if (!ledgerId) { $('not-found').classList.remove('hidden'); return; }
     $('exp-date').valueAsDate = new Date();
     $('inc-date').valueAsDate = new Date();
