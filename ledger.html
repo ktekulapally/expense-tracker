@@ -261,11 +261,14 @@ function renderCategoryOptions() {
   sel.innerHTML = allCategories.map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join('')
     + '<option value="__add_new__">+ Add new category…</option>';
   if (allCategories.some(c => c.name === prev)) sel.value = prev;
+  updateNewCategoryVisibility();
 }
 
-$('exp-category').addEventListener('change', () => {
+function updateNewCategoryVisibility() {
   $('new-category-row').classList.toggle('hidden', $('exp-category').value !== '__add_new__');
-});
+}
+
+$('exp-category').addEventListener('change', updateNewCategoryVisibility);
 
 $('save-category-btn').addEventListener('click', async () => {
   const name = $('new-category-name').value.trim();
