@@ -23,6 +23,11 @@ body.theme-recurring {
   --paper-line: #e5d3a8;
   --card: #fcf7ea;
 }
+body.theme-ledgers {
+  --paper: #efe9f5;
+  --paper-line: #d9cce8;
+  --card: #faf7fc;
+}
 
 * { box-sizing: border-box; }
 body {
@@ -49,6 +54,14 @@ body.theme-income {
 body.theme-recurring {
   background-image: repeating-linear-gradient(135deg, var(--paper-line) 0px, var(--paper-line) 1px, transparent 1px, transparent 14px);
   background-size: auto;
+  background-position: 0 0;
+}
+/* Custom Ledgers: fine grid, evokes a ledger/spreadsheet of many books */
+body.theme-ledgers {
+  background-image:
+    linear-gradient(var(--paper-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--paper-line) 1px, transparent 1px);
+  background-size: 22px 22px;
   background-position: 0 0;
 }
 header.masthead .eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--brass-dark); }
