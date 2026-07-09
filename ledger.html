@@ -16,6 +16,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="supabase-config.js"></script>
 <script src="session-guard.js"></script>
 <script>
@@ -46,6 +47,7 @@ if ('serviceWorker' in navigator) {
       <a href="income.html">Income</a>
       <a href="ledgers.html" class="active">Custom Ledgers</a>
       <a href="recurring.html">Recurring &amp; Alerts</a>
+      <a href="insights.html">AI Advisor</a>
     </nav>
 
     <div class="toolbar">
@@ -81,6 +83,34 @@ if ('serviceWorker' in navigator) {
         <div class="stat-card">
           <div class="label">Net — This Month</div>
           <div class="value" id="month-net">₹0.00</div>
+        </div>
+      </div>
+
+      <!-- AI ADVISOR -->
+      <div class="entry-card">
+        <h3>Where is this ledger's money going?</h3>
+        <p style="color:var(--ink-soft); font-size:13px; margin-top:-8px;">
+          Sends a summary of this ledger's own category totals to an
+          open-weight LLM for a plain-language read and a few practical
+          suggestions.
+        </p>
+        <div class="period-toggle">
+          <button data-period="1m">Last month</button>
+          <button data-period="3m" class="active">Last 3 months</button>
+          <button data-period="6m">Last 6 months</button>
+        </div>
+        <button class="btn-primary" style="width:auto;" id="analyze-btn">Analyze this ledger</button>
+        <div id="advice-error" class="error-msg hidden" style="margin-top:16px;"></div>
+        <div style="margin-top:20px;">
+          <div id="advice-placeholder" class="advice-placeholder">
+            Pick a time range and click "Analyze this ledger" to get started.
+          </div>
+          <div id="advice-loading" class="advice-placeholder hidden">Thinking this through…</div>
+          <div id="advice-box" class="advice-box hidden"></div>
+        </div>
+        <div id="disclaimer" class="disclaimer hidden">
+          This is general, automatically generated information based on your
+          own logged data — not financial advice from a licensed advisor.
         </div>
       </div>
 
@@ -246,6 +276,51 @@ async function init() {
   await loadCategories();
   await loadAll();
 }
+
+/* ---------------- AI ADVISOR ---------------- */
+let selectedPeriod = '3m';
+
+document.querySelectorAll('.period-toggle button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.period-toggle button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedPeriod = btn.dataset.period;
+  });
+});
+
+$('analyze-btn').addEventListener('click', async () => {
+  hideMsg('advice-error');
+  $('advice-placeholder').classList.add('hidden');
+  $('advice-box').classList.add('hidden');
+  $('disclaimer').classList.add('hidden');
+  $('advice-loading').classList.remove('hidden');
+  $('analyze-btn').disabled = true;
+
+  try {
+    const { data: sessionData } = await supabaseClient.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+    if (!accessToken) throw new Error('Your session expired — please sign in again.');
+
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/analyze-spending`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+      body: JSON.stringify({ period: selectedPeriod, ledgerId }),
+    });
+
+    const result = await res.json();
+    if (!res.ok || result.error) throw new Error(result.error || 'Something went wrong analyzing this ledger.');
+
+    $('advice-box').innerHTML = marked.parse(result.advice || '');
+    $('advice-box').classList.remove('hidden');
+    $('disclaimer').classList.remove('hidden');
+  } catch (err) {
+    showMsg('advice-error', err.message || String(err));
+    $('advice-placeholder').classList.remove('hidden');
+  } finally {
+    $('advice-loading').classList.add('hidden');
+    $('analyze-btn').disabled = false;
+  }
+});
 
 /* ---------------- CATEGORIES ---------------- */
 async function loadCategories() {

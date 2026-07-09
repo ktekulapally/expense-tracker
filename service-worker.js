@@ -5,7 +5,7 @@
 //
 // Bump CACHE_NAME any time you change one of the precached files below, so
 // returning visitors get the fresh version instead of a stale cached one.
-const CACHE_NAME = "ledger-shell-v2";
+const CACHE_NAME = "ledger-shell-v4";
 
 const PRECACHE_URLS = [
   "./index.html",
@@ -14,6 +14,7 @@ const PRECACHE_URLS = [
   "./reset-password.html",
   "./ledgers.html",
   "./ledger.html",
+  "./insights.html",
   "./styles.css?v=2",
   "./supabase-config.js",
   "./session-guard.js",
