@@ -1,6 +1,6 @@
 # Ledger v5 — Idle-logout fix, Custom Ledgers, and cleanup
 
-## Fixes
+## Fixes  
 
 1. **Mobile not signing out after 1 hour** — real bug, not a mobile quirk.
    `session-guard.js` was resetting the "last activity" clock to *right now*
